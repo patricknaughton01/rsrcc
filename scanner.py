@@ -47,11 +47,20 @@ def _get_operator(f):
     """
     _skip_white(f)
     op = ""
-    while (op + _n_char) in operators:
+    while __some_prefix(op + _n_char, _operators):
         op += _n_char
         _n_char = f.read(1)
     _skip_white(f)
     return op
+
+
+def __some_prefix(s, st):
+    """Return whether str s is a prefix of some element in st
+    """
+    for e in st:
+        if e.startswith(s):
+            return True
+    return False
 
 
 def _match(f, c):
