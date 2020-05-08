@@ -5,37 +5,40 @@ import error
 import codegen
 import scanner
 
-from enum import Enum
+GLOBAL_PREFIX = "GL"
 
-_keywords = set('if', 'while', 'function', 'var')
+_keywords = {'if', 'while', 'function', 'var'}
 _symtab = {}
+_label_count = 0
 
 
 def _program(f):
-    while scanner._nchar != '}':
+    name = scanner._get_name(f)
+    while name == 'var':
+        _global_var(f)
         name = scanner._get_name(f)
-        if name == 'var':
-            _global_var(f)
-        elif name == 'function':
-            _function(f)
-        else:
-            error._expected("Variable or function declaration")
+    while name == 'function':
+        _function(f)
+        name = scanner._get_name(f)
 
 
 def _global_var(f):
+    global _symtab, _keywords
     identifier = scanner._get_name(f)
     if identifier in _symtab:
         # Eventually calls sys.exit()
         error._error("Duplicate symbol variable: " + str(identifier))
     if identifier in _keywords:
         error._error("Variable shadows keyword: " + str(identifier))
-    if scanner._n_char == '=':
+    label = GLOBAL_PREFIX + str(_next_label())
+    codegen._alloc_global(label)
+    _symtab[identifier] = {'type': 'global_var'}
+    if scanner._nchar == '=':
         # This variable is initialized
-        scanner._match('=')
-        pass
-    else:
-        # No initialization
-        pass
+        scanner._match(f, '=')
+        scanner._skip_white(f)
+        _expression(f)
+        codegen._store_primary_abs(label)
 
 
 def _function(f):
@@ -43,16 +46,16 @@ def _function(f):
     if identifier in _symtab:
         # Eventually calls sys.exit()
         error._error("Duplicate symbol function: " + str(identifier))
-    scanner._match('(')
+    scanner._match(f, '(')
     # Do something with parameter list
-    scanner._match(')')
-    scanner._match('{')
+    scanner._match(f, ')')
+    scanner._match(f, '{')
     _block(f)
-    scanner._match('}')
+    scanner._match(f, '}')
 
 
 def _block(f):
-    while scanner._n_char != '}':
+    while scanner._nchar != '}':
         pass
 
 
@@ -61,8 +64,23 @@ def _expression(f):
     op = scanner._get_operator(f)
     while op != "":
         if op not in scanner._or_ops:
-            error._expected('or operator')
+            # Unget the op chars and reset scanner._nchar
+            f.seek(-len(op) - 1, 1)
+            scanner._nchar = f.read(1).decode("utf-8")
+            # Break out of the loop - not our operator
+            break
+        codegen._push_primary()
         _term(f)
+        codegen._pop_secondary()
+        # Both branches use the same arguments
+        regs = (codegen.PRIMARY, codegen.PRIMARY, codegen.SECONDARY)
+        if op == '|':
+            # Unpack the regs tuple as args
+            codegen._bitwise_or(*regs)
+        elif op == '||':
+            codegen._logical_or(*regs)
+        else:
+            error._expected('| or ||')
         op = scanner._get_operator(f)
 
 
@@ -71,7 +89,11 @@ def _term(f):
     op = scanner._get_operator(f)
     while op != "":
         if op not in scanner._and_ops:
-            error._expected('and operator')
+            # Unget the op chars and reset scanner._nchar
+            f.seek(-len(op) - 1, 1)
+            scanner._nchar = f.read(1).decode("utf-8")
+            # Break out of the loop - not our operator
+            break
         _factor(f)
         op = scanner._get_operator(f)
 
@@ -89,7 +111,9 @@ def _factor(f):
     elif op == '':
         _relation(f)
     else:
-        error._expected('factor or not-op')
+        # Unget the op chars and reset scanner._nchar
+        f.seek(-len(op) - 1, 1)
+        scanner._nchar = f.read(1).decode("utf-8")
 
 
 def _relation(f):
@@ -97,7 +121,11 @@ def _relation(f):
     op = scanner._get_operator(f)
     while op != "":
         if op not in scanner._rel_ops:
-            error._expected('rel op')
+            # Unget the op chars and reset scanner._nchar
+            f.seek(-len(op) - 1, 1)
+            scanner._nchar = f.read(1).decode("utf-8")
+            # Break out of the loop - not our operator
+            break
         _a_expression(f)
         op = scanner._get_operator(f)
 
@@ -107,7 +135,11 @@ def _a_expression(f):
     op = scanner._get_operator(f)
     while op != "":
         if op not in scanner._add_ops:
-            error._expected('add op')
+            # Unget the op chars and reset scanner._nchar
+            f.seek(-len(op) - 1, 1)
+            scanner._nchar = f.read(1).decode("utf-8")
+            # Break out of the loop - not our operator
+            break
         _a_term(f)
         op = scanner._get_operator(f)
 
@@ -117,7 +149,11 @@ def _a_term(f):
     op = scanner._get_operator(f)
     while op != "":
         if op not in scanner._mul_ops:
-            error._expected('mul op')
+            # Unget the op chars and reset scanner._nchar
+            f.seek(-len(op) - 1, 1)
+            scanner._nchar = f.read(1).decode("utf-8")
+            # Break out of the loop - not our operator
+            break
         _a_factor(f)
         op = scanner._get_operator(f)
 
@@ -130,16 +166,25 @@ def _a_factor(f):
             # Negate the tos, if + we don't have to do anything
             pass
     elif op == '':
-        if scanner._n_char == '(':
-            scanner._match('(')
+        if scanner._nchar == '(':
+            scanner._match(f, '(')
             _expression(f)
-            scanner._match(')')
-        elif scanner._is_valid_identifier_start(scanner._n_char):
+            scanner._match(f, ')')
+        elif scanner._is_valid_identifier_start(scanner._nchar):
             id = scanner._get_name(f)
             # Do something with the identifier (push value to tos?)
             # TODO: determine if var or function
-        elif scanner._is_num(scanner._n_char):
+        elif scanner._is_num(scanner._nchar):
             n = scanner._get_num(f)
-            # Do something with the number (push to tos?)
+            codegen._load_primary_address(n)
     else:
-        error._expected('a_factor or add-op')
+        # Unget the op chars and reset scanner._nchar
+        f.seek(-len(op), 1)
+        scanner._nchar = f.read(1).decode("utf-8")
+
+
+def _next_label():
+    global _label_count
+    label = _label_count
+    _label_count += 1
+    return label
