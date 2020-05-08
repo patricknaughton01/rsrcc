@@ -32,7 +32,7 @@ def _global_var(f):
         error._error("Variable shadows keyword: " + str(identifier))
     label = GLOBAL_PREFIX + str(_next_label())
     codegen._alloc_global(label)
-    _symtab[identifier] = {'type': 'global_var'}
+    _symtab[identifier] = {'type': 'global_var', 'label': label}
     if scanner._nchar == '=':
         # This variable is initialized
         scanner._match(f, '=')
@@ -94,7 +94,16 @@ def _term(f):
             scanner._nchar = f.read(1).decode("utf-8")
             # Break out of the loop - not our operator
             break
+        codegen._push_primary()
         _factor(f)
+        codegen._pop_secondary()
+        regs = (codegen.PRIMARY, codegen.PRIMARY, codegen.SECONDARY)
+        if op == '&':
+            codegen._bitwise_and(*regs)
+        elif op == '&&':
+            codegen._logical_and(*regs)
+        else:
+            error._expected('& or &&')
         op = scanner._get_operator(f)
 
 
@@ -102,12 +111,11 @@ def _factor(f):
     op = scanner._get_operator(f)
     if op in scanner._not_ops:
         _factor(f)
+        regs = (codegen.PRIMARY, codegen.PRIMARY)
         if op == '~':
-            # Bitwise not the tos
-            pass
+            codegen._bitwise_not(*regs)
         elif op == '!':
-            # Logical not the tos
-            pass
+            codegen._logical_not(*regs)
     elif op == '':
         _relation(f)
     else:
@@ -126,7 +134,10 @@ def _relation(f):
             scanner._nchar = f.read(1).decode("utf-8")
             # Break out of the loop - not our operator
             break
+        codegen._push_primary()
         _a_expression(f)
+        codegen._pop_secondary()
+        codegen._cmp_def(op)
         op = scanner._get_operator(f)
 
 
@@ -140,7 +151,20 @@ def _a_expression(f):
             scanner._nchar = f.read(1).decode("utf-8")
             # Break out of the loop - not our operator
             break
+        # TODO Handle unary ++ and --
+        codegen._push_primary()
         _a_term(f)
+        codegen._pop_secondary()
+        # Flip order of primary and secondary for - b/c second argument is
+        # the one in primary. + is commutative so it doesn't matter for that
+        # case
+        regs = (codegen.PRIMARY, codegen.SECONDARY, codegen.PRIMARY)
+        if op == '+':
+            codegen._add(*regs)
+        elif op == '-':
+            codegen._sub(*regs)
+        else:
+            error._expected('+ or -')
         op = scanner._get_operator(f)
 
 
@@ -154,7 +178,17 @@ def _a_term(f):
             scanner._nchar = f.read(1).decode("utf-8")
             # Break out of the loop - not our operator
             break
+        codegen._push_primary()
         _a_factor(f)
+        codegen._pop_secondary()
+        # Flip order for / for same reason as -. * is comm so doesn't matter
+        regs = (codegen.PRIMARY, codegen.SECONDARY, codegen.PRIMARY)
+        if op == '*':
+            codegen._mul(*regs)
+        elif op == '/':
+            codegen._div(*regs)
+        else:
+            error._expected('* or /')
         op = scanner._get_operator(f)
 
 
@@ -163,8 +197,8 @@ def _a_factor(f):
     if op in scanner._add_ops:
         _a_factor(f)
         if op == '-':
-            # Negate the tos, if + we don't have to do anything
-            pass
+            # Negate the primary reg, if + we don't have to do anything
+            codegen._neg(codegen.PRIMARY, codegen.PRIMARY)
     elif op == '':
         if scanner._nchar == '(':
             scanner._match(f, '(')
@@ -172,6 +206,8 @@ def _a_factor(f):
             scanner._match(f, ')')
         elif scanner._is_valid_identifier_start(scanner._nchar):
             id = scanner._get_name(f)
+            if id not in _symtab:
+                error._error("Undeclared identifier: " + str(id))
             # Do something with the identifier (push value to tos?)
             # TODO: determine if var or function
         elif scanner._is_num(scanner._nchar):
