@@ -2,6 +2,7 @@ import parser
 import scanner
 import argparse
 
+
 def main():
     p = argparse.ArgumentParser(
         description='Compiler or RSRCC that targets the RSRC architecture'

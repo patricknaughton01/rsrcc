@@ -6,8 +6,9 @@ PRIMARY = "r1"
 SECONDARY = "r2"
 STATUS = PRIMARY    # Put statuses from comparision results in the PRIMARY reg
 ZERO = "r0"
-STACK_REG = "r31"
-BASE_REG = "r30"
+RETURN = "r19"
+STACK = "r31"
+BASE = "r30"
 WORD = 32
 BYTE = 8
 
@@ -15,6 +16,14 @@ BYTE = 8
 def _alloc_global(label):
     # Allocate 1 32-bit word for the global and label this memory location
     print(label + ":\t.dw\t1")
+
+
+#################################################
+# Branch Operations                             #
+#################################################
+
+def _br(rb):
+    print("br {}".format(rb))
 
 
 #################################################
@@ -39,7 +48,7 @@ def _cmp(ra, rb, rc, op):
         if op == '>=':
             # true if sign bit is cleared, to comply with interface, need to
             # not the result
-            _bitwise_not(ra, ra)
+            _logical_not(ra, ra)
     elif op == '>' or op == '<=':
         # For >, rb-rc is strictly positive so its negative is strictly
         # negative, then we just check the sign (-0 = 0 so the sign will
@@ -47,9 +56,9 @@ def _cmp(ra, rb, rc, op):
         _neg(ra, ra)
         _shra(ra, ra, WORD-1)
         if op == '<=':
-            _bitwise_not(ra, ra)
+            _logical_not(ra, ra)
     elif op == '==':
-        _bitwise_not(ra, ra)
+        _logical_not(ra, ra)
 
 
 #################################################
@@ -157,8 +166,8 @@ def _pop_secondary():
 
 def _pop(reg):
     # Move SP first b/c it points off the end of the stack
-    _addi(STACK_REG, STACK_REG, WORD / BYTE)
-    _load(reg, 0, STACK_REG)
+    _addi(STACK, STACK, WORD / BYTE)
+    _load(reg, 0, STACK)
 
 
 def _push_primary():
@@ -170,8 +179,8 @@ def _push_secondary():
 
 
 def _push(reg):
-    _store(reg, 0, STACK_REG)
-    _addi(STACK_REG, STACK_REG, -WORD / BYTE)
+    _store(reg, 0, STACK)
+    _addi(STACK, STACK, -WORD / BYTE)
 
 
 #################################################
