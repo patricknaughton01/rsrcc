@@ -5,6 +5,7 @@ new architecture simply requires a change of the assembly output.
 PRIMARY = "r1"
 SECONDARY = "r2"
 STATUS = PRIMARY    # Put statuses from comparision results in the PRIMARY reg
+BRANCH_TARGET = "r3"
 ZERO = "r0"
 RETURN = "r19"
 STACK = "r31"
@@ -18,12 +19,40 @@ def _alloc_global(label):
     print(label + ":\t.dw\t1")
 
 
+def _alloc_stack(num_bytes):
+    _addi(STACK, STACK, -num_bytes)
+
+
 #################################################
 # Branch Operations                             #
 #################################################
 
+def _br_def():
+    _br(BRANCH_TARGET)
+
+
 def _br(rb):
     print("br {}".format(rb))
+
+
+def _brzr_def():
+    # By default, branch to BRANCH_TARGET testing PRIMARY
+    _brzr(BRANCH_TARGET, PRIMARY)
+
+
+def _brzr(rb, rc):
+    # Branch to rb if rc is zero
+    print('brzr {}, {}'.format(rb, rc))
+
+
+def _brnz_def():
+    # By default, branch to BRANCH_TARGET testing PRIMARY
+    _brnz(BRANCH_TARGET, PRIMARY)
+
+
+def _brnz(rb, rc):
+    # Branch to rb if rc is non-zero
+    print('brnz {}, {}'.format(rb, rc))
 
 
 #################################################
@@ -189,6 +218,10 @@ def _push(reg):
 
 def _load_primary_address(addr):
     _load_address(PRIMARY, addr)
+
+
+def _load_branch_address(addr):
+    _load_address(BRANCH_TARGET, addr)
 
 
 def _load_address(reg, addr):

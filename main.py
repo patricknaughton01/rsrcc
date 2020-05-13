@@ -15,9 +15,6 @@ def main():
             _init(f)
             parser._program(f)
             _epilog()
-            print("Symbol table:")
-            for k, v in parser._symtab.items():
-                print(k, v)
     except IOError as e:
         print(e)
         print("Couldn't open file {}".format(args.source))

@@ -26,7 +26,6 @@ def _get_name(f):
     while _is_valid_identifier(_nchar):
         id += _nchar
         _nchar = f.read(1).decode("utf-8")
-    _skip_white(f)
     return id
 
 
@@ -44,7 +43,6 @@ def _get_num(f):
     while _is_num(_nchar):
         n += _nchar
         _nchar = f.read(1).decode("utf-8")
-    _skip_white(f)
     return n
 
 
@@ -76,9 +74,9 @@ def __some_prefix(s, st):
 
 def _match(f, c):
     global _nchar
+    _skip_white(f)
     if _nchar == c:
         _nchar = f.read(1).decode("utf-8")
-        _skip_white(f)
     else:
         error._expected(c)
 
