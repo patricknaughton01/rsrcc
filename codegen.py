@@ -7,7 +7,8 @@ SECONDARY = "r2"
 STATUS = PRIMARY    # Put statuses from comparision results in the PRIMARY reg
 BRANCH_TARGET = "r3"
 ZERO = "r0"
-RETURN = "r19"
+RETURN = "r18"
+RETURN_VAL = "r19"
 STACK = "r31"
 BASE = "r30"
 WORD = 32
@@ -20,12 +21,26 @@ def _alloc_global(label):
 
 
 def _alloc_stack(num_bytes):
-    _addi(STACK, STACK, -num_bytes)
+    _addi(STACK, STACK, int(-num_bytes))
+
+
+def _dealloc_stack(num_bytes):
+    _addi(STACK, STACK, int(num_bytes))
 
 
 #################################################
 # Branch Operations                             #
 #################################################
+
+def _brl_def():
+    _brl(RETURN, BRANCH_TARGET)
+
+
+def _brl(ra, rb):
+    """Branch to rb storing PC in ra
+    """
+    print("brl {}, {}".format(ra, rb))
+
 
 def _br_def():
     _br(BRANCH_TARGET)
@@ -60,7 +75,7 @@ def _brnz(rb, rc):
 #################################################
 
 def _cmp_def(op):
-    _cmp(STATUS, PRIMARY, SECONDARY, op)
+    _cmp(STATUS, SECONDARY, PRIMARY, op)
 
 
 def _cmp(ra, rb, rc, op):
@@ -105,7 +120,7 @@ def _logical_or(ra, rb, rc):
     Right now, there is no instruction for logical or so this just does the
     same thing as `_bitwise_or`
     """
-    print("lor {}, {}, {}".format(ra, rb, rc))
+    print("or {}, {}, {}".format(ra, rb, rc))
 
 
 def _bitwise_and(ra, rb, rc):
@@ -119,7 +134,7 @@ def _logical_and(ra, rb, rc):
     Right now, there is no instruction for logical and so this just does the
     same thing as `_bitwise_and`
     """
-    print("land {}, {}, {}".format(ra, rb, rc))
+    print("and {}, {}, {}".format(ra, rb, rc))
 
 
 def _bitwise_not(ra, rc):
@@ -133,7 +148,7 @@ def _logical_not(ra, rc):
     Right now, there is no instruction for logical not so this just does the
     same thing as `_bitwise_not`
     """
-    print("lnot {}, {}".format(ra, rc))
+    print("not {}, {}".format(ra, rc))
 
 
 def _add(ra, rb, rc):
@@ -195,7 +210,7 @@ def _pop_secondary():
 
 def _pop(reg):
     # Move SP first b/c it points off the end of the stack
-    _addi(STACK, STACK, WORD / BYTE)
+    _addi(STACK, STACK, WORD // BYTE)
     _load(reg, 0, STACK)
 
 
@@ -207,24 +222,36 @@ def _push_secondary():
     _push(SECONDARY)
 
 
+def _push_ret():
+    _push(RETURN)
+
+
 def _push(reg):
     _store(reg, 0, STACK)
-    _addi(STACK, STACK, -WORD / BYTE)
+    _addi(STACK, STACK, -WORD // BYTE)
 
 
 #################################################
 # LD/ST Operations                              #
 #################################################
 
-def _load_primary_address(addr):
-    _load_address(PRIMARY, addr)
+def _load_primary_address(rb, c2):
+    _load_address(PRIMARY, rb, c2)
 
 
-def _load_branch_address(addr):
-    _load_address(BRANCH_TARGET, addr)
+def _load_address(ra, rb, c2):
+    print("la {}, {}({})".format(ra, c2, rb))
 
 
-def _load_address(reg, addr):
+def _load_primary_address_relative(addr):
+    _load_address_relative(PRIMARY, addr)
+
+
+def _load_branch_address_relative(addr):
+    _load_address_relative(BRANCH_TARGET, addr)
+
+
+def _load_address_relative(reg, addr):
     print("lar {}, {}".format(reg, addr))
 
 

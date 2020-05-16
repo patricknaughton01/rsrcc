@@ -2,9 +2,14 @@ var a = 2 < 3
 var b = a + 1
 
 function t(x, y){
-    var c = 2
+    var c = 10
     if(x == y){
         a = a + 3
         var c = 1
     }
+    return(c)
+}
+
+function main(){
+    b = t(16, 16)
 }

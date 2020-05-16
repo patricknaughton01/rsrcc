@@ -1,5 +1,6 @@
 import parser
 import scanner
+import codegen
 import argparse
 
 
@@ -25,10 +26,13 @@ def _init(f):
 
 
 def _prolog():
-    print(".org 4096")
+    # Initialize stack pointer and base pointer
+    codegen._load_address_relative(codegen.STACK, 0xFFFC)
+    codegen._load_address_relative(codegen.BASE, 0xFFFC)
 
 
 def _epilog():
+    print("stop")
     print("END")
 
 

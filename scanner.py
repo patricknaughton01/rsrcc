@@ -4,6 +4,7 @@ are then passed on to the parser.
 
 import error
 
+_line = 1
 _nchar = 0
 _or_ops = {'|', '||'}
 _and_ops = {'&', '&&'}
@@ -21,7 +22,8 @@ def _get_name(f):
         return ''
     if not _is_valid_identifier_start(_nchar):
         # Eventually calls sys.exit()
-        error._expected("Identifier beginning [alpha or _]")
+        error._expected(("Identifier beginning [alpha or _], got {} on "
+                        + "line {}").format(_nchar, _line))
     id = ""
     while _is_valid_identifier(_nchar):
         id += _nchar
@@ -82,8 +84,10 @@ def _match(f, c):
 
 
 def _skip_white(f):
-    global _nchar
+    global _nchar, _line
     while _is_white(_nchar):
+        if _nchar == '\n':
+            _line += 1
         _nchar = f.read(1).decode("utf-8")
 
 

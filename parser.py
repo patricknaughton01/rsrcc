@@ -16,7 +16,9 @@ _keywords = {'if', 'else', 'while', 'function', 'var', 'return'}
 # `_symtab[0]` is the global symbol table
 _symtab = [{}]
 _label_count = 0
-_local_offset = 0
+# Leave one word of space for our return address before storing local vars
+_init_local_offset = -codegen.WORD // codegen.BYTE
+_local_offset = _init_local_offset
 
 
 def _program(f):
@@ -26,7 +28,7 @@ def _program(f):
         name = scanner._get_name(f)
     # After parsing all the global variable declarations we want to jump to
     # main
-    codegen._load_primary_address(MAIN_LABEL)
+    codegen._load_primary_address_relative(MAIN_LABEL)
     codegen._br(codegen.PRIMARY)
     while name == 'function':
         _function(f)
@@ -45,7 +47,7 @@ def _global_var(f):
     label = GLOBAL_PREFIX + str(_next_label())
     codegen._alloc_global(label)
     _symtab[0][identifier] = {'type': 'global_var', 'offset': label, 'base':
-        codegen.ZERO}
+                              codegen.ZERO}
     if scanner._nchar == '=':
         # This variable is initialized
         scanner._match(f, '=')
@@ -63,11 +65,11 @@ def _function(f):
         error._error("Duplicate symbol function: " + str(identifier))
     _symtab[0][identifier] = {'type': 'function'}
     scanner._match(f, '(')
-    # Offset from base pointer for the local variables, leave two spaces for
-    # pointer to the parent's bp and the function's return address
-    offset = (codegen.WORD // codegen.BYTE) * 2
+    # Offset from base pointer for the local variables, leave one space for
+    # pointer to the parent's bp
+    offset = (codegen.WORD // codegen.BYTE)
     # Set local offset to track location of local variables.
-    _local_offset = 0
+    _local_offset = _init_local_offset
     local_symbols = {}
     while scanner._is_valid_identifier_start(scanner._nchar):
         id = scanner._get_name(f)
@@ -95,6 +97,9 @@ def _function(f):
     _symtab[0][identifier]['offset'] = label
     _symtab[0][identifier]['base'] = codegen.ZERO
     codegen._post_label(label)
+    # Function assembly body starts here
+    # Save return address
+    codegen._push_ret()
     _block(f)
     scanner._match(f, '}')
     # Remove our local symbol table
@@ -114,6 +119,8 @@ def _block(f):
             _local_var(f)
         elif identifier == 'break':
             pass
+        elif identifier == 'return':
+            _return(f)
         else:
             # Either an assignment or a function call
             # Look in symbol table to tell which is which
@@ -126,6 +133,7 @@ def _block(f):
                     _function_call(f, entry)
             else:
                 error._error("Undeclared identifier: " + str(identifier))
+        scanner._skip_white(f)
     _symtab.pop()
 
 
@@ -135,7 +143,7 @@ def _if(f):
     scanner._match(f, ')')
     scanner._match(f, '{')
     label = LABEL_PREFIX + str(_next_label())
-    codegen._load_branch_address(label)
+    codegen._load_branch_address_relative(label)
     codegen._brzr_def()
     _block(f)
     codegen._post_label(label)
@@ -151,10 +159,10 @@ def _while(f):
     _expression(f)
     scanner._match(f, ')')
     scanner._match(f, '{')
-    codegen._load_branch_address(label_exit)
+    codegen._load_branch_address_relative(label_exit)
     codegen._brzr_def()
     _block(f)
-    codegen._load_branch_address(label_loop)
+    codegen._load_branch_address_relative(label_loop)
     codegen._br_def()
     scanner._match(f, '}')
 
@@ -185,7 +193,44 @@ def _assignment(f, entry):
 
 def _function_call(f, entry):
     num_param = entry['num_param']
+    codegen._alloc_stack(num_param * codegen.WORD // codegen.BYTE)
+    offset = codegen.WORD // codegen.BYTE
+    scanner._match(f, '(')
+    for i in range(num_param):
+        _expression(f)
+        codegen._store_primary(offset, codegen.STACK)
+        offset += codegen.WORD // codegen.BYTE
+        scanner._skip_white(f)
+        if scanner._nchar == ',':
+            scanner._match(f, ',')
+        else:
+            break
+    scanner._match(f, ')')
+    codegen._push(codegen.BASE)
+    # Base pointer points to the thing that was just pushed (address of old
+    # bp) and we need to offset b/c STACK points off end of stack
+    codegen._load_address(codegen.BASE, codegen.STACK, codegen.WORD //
+                          codegen.BYTE)
+    codegen._load_branch_address_relative(entry['offset'])
+    codegen._brl_def()
+    # Clean up the stack: restore rb and remove the args we pushed
+    codegen._pop(codegen.BASE)
+    codegen._dealloc_stack(num_param * codegen.WORD // codegen.BYTE)
 
+
+def _return(f):
+    # Dealloc local vars to get back to return address
+    codegen._dealloc_stack(abs(_local_offset) - abs(_init_local_offset))
+    scanner._skip_white(f)
+    if scanner._nchar == '(':
+        scanner._match(f, '(')
+        _expression(f)
+        # Copy value over to return value register
+        codegen._load_address(codegen.RETURN_VAL, codegen.PRIMARY, 0)
+        scanner._match(f, ')')
+    # Pop the return address into the BRANCH_TARGET register and return to it
+    codegen._pop(codegen.BRANCH_TARGET)
+    codegen._br_def()
 
 
 def _expression(f):
@@ -340,10 +385,15 @@ def _a_factor(f):
                 error._error("Undeclared identifier: " + str(id))
             if entry['type'] == 'global_var' or entry['type'] == 'local_var':
                 codegen._load_primary(entry['offset'], entry['base'])
-            # TODO handle function calls
+            elif entry['type'] == 'function':
+                _function_call(f, entry)
+                # Move return value to primary
+                codegen._load_primary_address(codegen.RETURN_VAL, 0)
+            else:
+                error._error("Unknown type of entry: {}".format(str(entry)))
         elif scanner._is_num(scanner._nchar):
             n = scanner._get_num(f)
-            codegen._load_primary_address(n)
+            codegen._load_primary_address_relative(n)
     else:
         # Unget the op chars and reset scanner._nchar
         f.seek(-len(op), 1)
