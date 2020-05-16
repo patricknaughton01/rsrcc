@@ -109,6 +109,8 @@ def _function(f):
 def _block(f):
     _symtab.append({})
     scanner._skip_white(f)
+    local_allocations = 0
+    dealloc = True
     while scanner._nchar != '}':
         identifier = scanner._get_name(f)
         if identifier == 'if':
@@ -116,10 +118,16 @@ def _block(f):
         elif identifier == 'while':
             _while(f)
         elif identifier == 'var':
+            local_allocations += 1
             _local_var(f)
         elif identifier == 'break':
             pass
         elif identifier == 'return':
+            dealloc = False
+            # Dealloc local vars - special case because the code will exit
+            # the block before the "end"
+            codegen._dealloc_stack(local_allocations
+                                   * codegen.WORD // codegen.BYTE)
             _return(f)
         else:
             # Either an assignment or a function call
@@ -134,6 +142,10 @@ def _block(f):
             else:
                 error._error("Undeclared identifier: " + str(identifier))
         scanner._skip_white(f)
+    if dealloc:
+        # Dealloc local vars to get back to return address
+        codegen._dealloc_stack(local_allocations
+                               * codegen.WORD // codegen.BYTE)
     _symtab.pop()
 
 
@@ -219,8 +231,6 @@ def _function_call(f, entry):
 
 
 def _return(f):
-    # Dealloc local vars to get back to return address
-    codegen._dealloc_stack(abs(_local_offset) - abs(_init_local_offset))
     scanner._skip_white(f)
     if scanner._nchar == '(':
         scanner._match(f, '(')

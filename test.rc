@@ -1,15 +1,14 @@
-var a = 2 < 3
-var b = a + 1
+var a
+var b
 
-function t(x, y){
-    var c = 10
-    if(x == y){
-        a = a + 3
-        var c = 1
+function fib(n){
+    if(n < 2){
+        return(n)
     }
-    return(c)
+    return(fib(n-1) + fib(n-2))
 }
 
 function main(){
-    b = t(16, 16)
+    a = fib(1)
+    b = fib(12)
 }
