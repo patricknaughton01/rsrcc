@@ -28,7 +28,8 @@ rsp->   Args to A's callees
                     <function-call> | <return>
 <if>            ::= 'if(' <expression> '){' <block> '}' ['else{' <block> '}']
 <while>         ::= 'while(' <expression> '){' <block> '}'
-<assignment>    ::= <identifier> '=' <expression>
+<assignment>    ::= (<identifier>) '=' <expression>
+<p-assignment>  ::= '@' '(' <expression> ')' '=' <expression>
 <local-var-decl>::= 'var' <identifier> [ '=' <expression> ]
 <function-call> ::= <identifier> '(' (<expression>,)* ')'
 <return>        ::= 'return' ['(' <expression> ')']
@@ -40,7 +41,8 @@ rsp->   Args to A's callees
 <a-expression>  ::= <a-term> [<add-op> <a-term>]*
 <a-term>        ::= <a-factor> [<mul-op> <a-factor>]*
 <a-factor>      ::= <add-op> <a-factor> | <literal> | <identifier> | 
-                    <function-call> | '('expression')'
+                    <function-call> | '('<expression>')' | 
+                    '@' '(' <expression> ')'
 <or-op>         ::= '|' | '||'
 <and-op>        ::= '&' | '&&'
 <not>           ::= '~' | '!'

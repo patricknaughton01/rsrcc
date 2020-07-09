@@ -112,35 +112,41 @@ def _block(f):
     local_allocations = 0
     dealloc = True
     while scanner._nchar != '}':
-        identifier = scanner._get_name(f)
-        if identifier == 'if':
-            _if(f)
-        elif identifier == 'while':
-            _while(f)
-        elif identifier == 'var':
-            local_allocations += 1
-            _local_var(f)
-        elif identifier == 'break':
-            pass
-        elif identifier == 'return':
-            dealloc = False
-            # Dealloc local vars - special case because the code will exit
-            # the block before the "end"
-            codegen._dealloc_stack(local_allocations
-                                   * codegen.WORD // codegen.BYTE)
-            _return(f)
-        else:
-            # Either an assignment or a function call
-            # Look in symbol table to tell which is which
-            entry = _lookup(identifier)
-            if entry is not None:
-                if entry['type'] == 'local_var' or entry['type'] == \
-                        'global_var':
-                    _assignment(f, entry)
-                elif entry['type'] == 'function':
-                    _function_call(f, entry)
+        if scanner._is_valid_identifier_start(scanner._nchar):
+            identifier = scanner._get_name(f)
+            if identifier == 'if':
+                _if(f)
+            elif identifier == 'while':
+                _while(f)
+            elif identifier == 'var':
+                local_allocations += 1
+                _local_var(f)
+            elif identifier == 'break':
+                pass
+            elif identifier == 'return':
+                dealloc = False
+                # Dealloc local vars - special case because the code will exit
+                # the block before the "end"
+                codegen._dealloc_stack(local_allocations
+                                       * codegen.WORD // codegen.BYTE)
+                _return(f)
             else:
-                error._error("Undeclared identifier: " + str(identifier))
+                # Either an assignment or a function call
+                # Look in symbol table to tell which is which
+                entry = _lookup(identifier)
+                if entry is not None:
+                    if entry['type'] == 'local_var' or entry['type'] == \
+                            'global_var':
+                        _assignment(f, entry)
+                    elif entry['type'] == 'function':
+                        _function_call(f, entry)
+                else:
+                    error._error("Undeclared identifier: " + str(identifier))
+        elif scanner._nchar == '@':
+            scanner._match(f, '@')
+            _p_assignment(f)
+        else:
+            error._expected("Identifier or '@', got {}".format(scanner._nchar))
         scanner._skip_white(f)
     if dealloc:
         # Dealloc local vars to get back to return address
@@ -201,6 +207,17 @@ def _assignment(f, entry):
     scanner._match(f, '=')
     _expression(f)
     codegen._store_primary(entry['offset'], entry['base'])
+
+
+def _p_assignment(f):
+    scanner._match(f, '(')
+    _expression(f)
+    scanner._match(f, ')')
+    codegen._push_primary()
+    scanner._match(f, '=')
+    _expression(f)
+    codegen._pop_secondary()
+    codegen._store_primary(0, codegen.SECONDARY)
 
 
 def _function_call(f, entry):
@@ -404,6 +421,12 @@ def _a_factor(f):
         elif scanner._is_num(scanner._nchar):
             n = scanner._get_num(f)
             codegen._load_primary_address_relative(n)
+        elif scanner._nchar == '@':
+            scanner._match(f, '@')
+            scanner._match(f, '(')
+            _expression(f)
+            scanner._match(f, ')')
+            codegen._load_primary(0, codegen.PRIMARY)
     else:
         # Unget the op chars and reset scanner._nchar
         f.seek(-len(op), 1)

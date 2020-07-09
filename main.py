@@ -27,7 +27,7 @@ def _init(f):
 
 def _prolog():
     # Initialize stack pointer and base pointer
-    codegen._load_address_relative(codegen.STACK, 0xFFFC)
+    codegen._load_address_relative(codegen.STACK, 0xFFF8)
     codegen._load_address_relative(codegen.BASE, 0xFFFC)
 
 

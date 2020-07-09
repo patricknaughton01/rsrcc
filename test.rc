@@ -8,7 +8,21 @@ function fib(n){
     return(fib(n-1) + fib(n-2))
 }
 
+function swap(x_addr, y_addr){
+    var tmp = @(x_addr)
+    @(x_addr) = @(y_addr)
+    @(y_addr) = tmp
+    return
+}
+
 function main(){
+
     a = fib(1)
-    b = fib(12)
+    b = fib(5)
+
+    var x_addr = 65280
+    var y_addr = 65284
+    @(x_addr) = 1
+    @(y_addr) = 2
+    swap(x_addr, y_addr)
 }
